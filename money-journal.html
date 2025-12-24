@@ -7,7 +7,6 @@
 
 <style>
 *{font-family:Cambria,Candara,"Segoe UI",serif;}
-
 body{
   margin:0;
   background:#061214;
@@ -134,6 +133,15 @@ const STORAGE_KEY = "money_journal_data";
 let data = {};
 let currentFolder=null, currentFile=null;
 
+/* ===== DOM SHORTCUT ===== */
+const lockScreen = document.getElementById("lockScreen");
+const passInput  = document.getElementById("passInput");
+const lockError  = document.getElementById("lockError");
+const titleEl    = document.getElementById("title");
+const viewEl     = document.getElementById("view");
+const imgModal   = document.getElementById("imgModal");
+const modalImg   = document.getElementById("modalImg");
+
 /* ===== STORAGE ===== */
 function loadData(){
   data = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
@@ -144,33 +152,39 @@ function saveData(){
 
 /* ===== LOCK ===== */
 function unlock(){
-  if(passInput.value===APP_PASSWORD){
-    lockScreen.style.display="none";
+  if(passInput.value === APP_PASSWORD){
+    lockScreen.style.display = "none";
     loadData();
     home();
-  }else lockError.innerText="Wrong password";
+  }else{
+    lockError.innerText = "Wrong password";
+  }
 }
 
 /* ===== FLOW ===== */
 function home(){
   currentFolder=currentFile=null;
-  title.innerText="📁 Folders";
-  view.innerHTML=`<input id="fname" placeholder="New Folder">
-  <button onclick="addFolder()">➕ Add Folder</button>`;
+  titleEl.innerText="📁 Folders";
+  viewEl.innerHTML=`
+    <input id="fname" placeholder="New Folder">
+    <button onclick="addFolder()">➕ Add Folder</button>
+  `;
   for(let f in data){
-    view.innerHTML+=`
-    <div class="card row">
-      <b onclick="openFolder('${f}')">📁 ${f}</b>
-      <button class="smallBtn" onclick="delFolder('${f}')">🗑</button>
-    </div>`;
+    viewEl.innerHTML+=`
+      <div class="card row">
+        <b onclick="openFolder('${f}')">📁 ${f}</b>
+        <button class="smallBtn" onclick="delFolder('${f}')">🗑</button>
+      </div>`;
   }
 }
 
 function addFolder(){
-  if(!fname.value||data[fname.value])return;
+  const fname = document.getElementById("fname");
+  if(!fname.value || data[fname.value]) return;
   data[fname.value]={};
   saveData(); home();
 }
+
 function delFolder(f){
   if(confirm("Delete folder?")){
     delete data[f];
@@ -180,23 +194,113 @@ function delFolder(f){
 
 function openFolder(f){
   currentFolder=f;
-  title.innerText="📂 "+f;
-  view.innerHTML=`<button class="back" onclick="home()">← Back</button>
-  <input id="file" placeholder="New File">
-  <button onclick="addFile()">➕ Add File</button>`;
+  titleEl.innerText="📂 "+f;
+  viewEl.innerHTML=`
+    <button class="back" onclick="home()">← Back</button>
+    <input id="file" placeholder="New File">
+    <button onclick="addFile()">➕ Add File</button>
+  `;
   for(let fi in data[f]){
-    view.innerHTML+=`
-    <div class="card row">
-      <b onclick="openFile('${fi}')">📄 ${fi}</b>
-      <button class="smallBtn" onclick="delFile('${fi}')">🗑</button>
-    </div>`;
+    viewEl.innerHTML+=`
+      <div class="card row">
+        <b onclick="openFile('${fi}')">📄 ${fi}</b>
+        <button class="smallBtn" onclick="delFile('${fi}')">🗑</button>
+      </div>`;
   }
 }
 
 function addFile(){
-  if(!file.value||data[currentFolder][file.value])return;
+  const file = document.getElementById("file");
+  if(!file.value || data[currentFolder][file.value]) return;
   data[currentFolder][file.value]=[];
   saveData(); openFolder(currentFolder);
 }
+
 function delFile(f){
-  if(conf
+  if(confirm("Delete file?")){
+    delete data[currentFolder][f];
+    saveData(); openFolder(currentFolder);
+  }
+}
+
+function openFile(f){
+  currentFile=f;
+  const e=data[currentFolder][f];
+  const bal=e.reduce((t,x)=>t+(x.type==="in"?x.amt:-x.amt),0);
+  titleEl.innerText=`📄 ${f} | ₹${bal}`;
+
+  viewEl.innerHTML=`
+    <button class="back" onclick="openFolder('${currentFolder}')">← Back</button>
+    <select id="type"><option value="in">Money In</option><option value="out">Money Out</option></select>
+    <input id="amt" placeholder="Amount">
+    <input id="note" placeholder="Note">
+    <input type="file" id="proof" accept="image/*">
+    <button onclick="addEntry()">➕ Add Entry</button>
+
+    <table>
+      <tr><th>Type</th><th>Amount</th><th>Note</th><th>Proof</th><th>❌</th></tr>
+      ${e.map((x,i)=>`
+        <tr>
+          <td class="${x.type}">${x.type}</td>
+          <td class="${x.type}">${x.type==="in"?"+":"-"}₹${x.amt}</td>
+          <td>${x.note}</td>
+          <td>${x.img?`<button onclick="viewImg('${x.img}')">View</button>`:"—"}</td>
+          <td><button class="smallBtn" onclick="delEntry(${i})">X</button></td>
+        </tr>`).join("")}
+    </table>
+
+    <button onclick="exportFile()">⬇ Export Excel</button>
+  `;
+}
+
+function addEntry(){
+  const amt=document.getElementById("amt");
+  const note=document.getElementById("note");
+  const type=document.getElementById("type");
+  const proof=document.getElementById("proof");
+
+  if(!amt.value) return;
+
+  if(proof.files.length){
+    const r=new FileReader();
+    r.onload=()=>pushEntry(type.value,amt.value,note.value,r.result);
+    r.readAsDataURL(proof.files[0]);
+  }else{
+    pushEntry(type.value,amt.value,note.value,null);
+  }
+}
+
+function pushEntry(type,amt,note,img){
+  data[currentFolder][currentFile].push({
+    type,
+    amt:Number(amt),
+    note,
+    img
+  });
+  saveData(); openFile(currentFile);
+}
+
+function delEntry(i){
+  data[currentFolder][currentFile].splice(i,1);
+  saveData(); openFile(currentFile);
+}
+
+function viewImg(src){
+  modalImg.src=src;
+  imgModal.style.display="flex";
+}
+
+function exportFile(){
+  let rows=[["Type","Amount","Note","Proof"]];
+  data[currentFolder][currentFile].forEach(e=>{
+    rows.push([e.type,e.amt,e.note,e.img?"YES":"NO"]);
+  });
+  const csv=rows.map(r=>r.join(",")).join("\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download=`${currentFolder}_${currentFile}.csv`;
+  a.click();
+}
+</script>
+</body>
+</html>
