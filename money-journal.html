@@ -157,23 +157,38 @@ async function loadFromGitHub(){
 }
 
 async function saveToGitHub(){
-  const r = await fetch(
-    `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_FILE}`,
-    {
-      method:"PUT",
-      headers:{
-        Authorization:`Bearer ${GITHUB_TOKEN}`,
-        "Content-Type":"application/json"
-      },
-      body:JSON.stringify({
-        message:"Update journal",
-        content:btoa(JSON.stringify(data,null,2)),
-        sha
-      })
+  try{
+    const response = await fetch(
+      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_FILE}`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${GITHUB_TOKEN}`,
+          "Content-Type": "application/json",
+          "Accept": "application/vnd.github+json"
+        },
+        body: JSON.stringify({
+          message: "Update journal",
+          content: btoa(JSON.stringify(data, null, 2)),
+          sha: sha
+        })
+      }
+    );
+
+    const result = await response.json();
+    console.log("SAVE RESPONSE:", result);
+
+    if(!response.ok){
+      alert("SAVE FAILED: " + (result.message || "Unknown error"));
+      return;
     }
-  );
-  const res = await r.json();
-  sha = res.content.sha;
+
+    sha = result.content.sha;
+    console.log("SAVE SUCCESS");
+
+  }catch(err){
+    console.error("SAVE ERROR:", err);
+  }
 }
 
 /* ===== FLOW ===== */
