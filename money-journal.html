@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Money Journal</title>
+
+<style>
+*{
+  font-family: Cambria, Candara, "Segoe UI", serif;
+}
+
+body{
+  margin:0;
+  background:#061214;
+  color:#fff;
+  min-height:100vh;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  padding:20px;
+}
+
+/* LOCK SCREEN */
+#lockScreen{
+  position:fixed;
+  inset:0;
+  background:#061214;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  z-index:9999;
+}
+.lockBox{
+  background:#071e1d;
+  padding:24px;
+  border-radius:16px;
+  width:100%;
+  max-width:360px;
+  text-align:center;
+  box-shadow:0 0 30px rgba(14,242,213,0.3);
+}
+.lockBox input{
+  width:100%;
+  padding:12px;
+  border-radius:10px;
+  border:none;
+  margin:12px 0;
+}
+.lockBox button{
+  width:100%;
+  padding:12px;
+  border-radius:30px;
+  border:none;
+  font-weight:800;
+  background:linear-gradient(90deg,#0ef2d5,#13f2ff);
+}
+#lockError{color:#ff4d6d;font-size:13px;}
+
+/* APP */
+.app{
+  width:100%;
+  max-width:520px;
+  background:#071e1d;
+  border-radius:20px;
+  padding:18px;
+  box-shadow:
+    0 0 0 1px rgba(14,242,213,0.35),
+    0 0 24px rgba(14,242,213,0.25),
+    0 0 48px rgba(19,242,255,0.18);
+}
+
+h2{text-align:center;margin:6px 0 14px;}
+
+button{
+  width:100%;
+  padding:12px;
+  border-radius:30px;
+  border:none;
+  background:linear-gradient(90deg,#0ef2d5,#13f2ff);
+  font-weight:800;
+  margin:6px 0;
+  cursor:pointer;
+}
+
+.back{background:#444;}
+
+input,select{
+  width:100%;
+  padding:10px;
+  border-radius:10px;
+  border:none;
+  margin:6px 0;
+}
+
+.card{
+  background:#05201f;
+  padding:12px;
+  border-radius:14px;
+  margin:8px 0;
+}
+
+.row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.smallBtn{
+  background:#ff4d6d;
+  border:none;
+  color:#fff;
+  padding:4px 8px;
+  border-radius:8px;
+}
+
+.in{color:#2cff9c;}
+.out{color:#ff4d6d;}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:10px;
+}
+th,td{
+  border-bottom:1px solid rgba(255,255,255,0.15);
+  padding:6px;
+  text-align:center;
+  font-size:14px;
+}
+
+/* IMAGE MODAL */
+#imgModal{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.8);
+  display:none;
+  justify-content:center;
+  align-items:center;
+  z-index:9999;
+}
+#imgModal img{
+  max-width:90%;
+  max-height:90%;
+  border-radius:12px;
+}
+</style>
+</head>
+
+<body>
+
+<!-- IMAGE MODAL -->
+<div id="imgModal" onclick="this.style.display='none'">
+  <img id="modalImg">
+</div>
+
+<!-- LOCK -->
+<div id="lockScreen">
+  <div class="lockBox">
+    <h2>🔒 Secure Journal</h2>
+    <input type="password" id="passInput" placeholder="Enter password">
+    <button onclick="unlock()">Unlock</button>
+    <div id="lockError"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="app">
+  <h2 id="title">📁 Folders</h2>
+  <div id="view"></div>
+</div>
+
+<script>
+/* ===== CONFIG ===== */
+const APP_PASSWORD = "1234";
+const GITHUB_OWNER = "rajendra9315";
+const GITHUB_REPO  = "money-journal-data";
+const GITHUB_FILE  = "data.json";
+const GITHUB_TOKEN = "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";
+
+let sha=null;
+let data={};
+let currentFolder=null;
+let currentFile=null;
+
+/* ===== LOCK ===== */
+function unlock(){
+  if(passInput.value===APP_PASSWORD){
+    lockScreen.style.display="none";
+    loadFromGitHub();
+  }else lockError.innerText="Wrong password";
+}
+
+/* ===== GITHUB ===== */
+async function loadFromGitHub(){
+  const r=await fetch(
+    `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_FILE}`,
+    {headers:{Authorization:`token ${GITHUB_TOKEN}`}}
+  );
+  const f=await r.json();
+  sha=f.sha;
+  data=JSON.parse(atob(f.content||"e30="));
+  home();
+}
+
+async function saveToGitHub(){
+  const content=btoa(JSON.stringify(data,null,2));
+  await fetch(
+    `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_FILE}`,
+    {
+      method:"PUT",
+      headers:{
+        Authorization:`token ${GITHUB_TOKEN}`,
+        "Content-Type":"application/json"
+      },
+      body:JSON.stringify({message:"Update journal",content,sha})
+    }
+  );
+}
+
+/* ===== FLOW ===== */
+function home(){
+  currentFolder=currentFile=null;
+  title.innerText="📁 Folders";
+  view.innerHTML=`
+    <input id="fname" placeholder="New Folder">
+    <button onclick="addFolder()">➕ Add Folder</button>
+  `;
+  for(let f in data){
+    view.innerHTML+=`
+      <div class="card row">
+        <b onclick="openFolder('${f}')">📁 ${f}</b>
+        <button class="smallBtn" onclick="delFolder('${f}')">🗑</button>
+      </div>`;
+  }
+}
+
+function addFolder(){
+  if(!fname.value||data[fname.value])return;
+  data[fname.value]={};
+  saveToGitHub(); home();
+}
+
+function delFolder(f){
+  if(confirm("Delete folder?")){
+    delete data[f];
+    saveToGitHub(); home();
+  }
+}
+
+function openFolder(f){
+  currentFolder=f;
+  title.innerText="📂 "+f;
+  view.innerHTML=`
+    <button class="back" onclick="home()">← Back</button>
+    <input id="file" placeholder="New File">
+    <button onclick="addFile()">➕ Add File</button>
+  `;
+  for(let fi in data[f]){
+    view.innerHTML+=`
+      <div class="card row">
+        <b onclick="openFile('${fi}')">📄 ${fi}</b>
+        <button class="smallBtn" onclick="delFile('${fi}')">🗑</button>
+      </div>`;
+  }
+}
+
+function addFile(){
+  if(!file.value||data[currentFolder][file.value])return;
+  data[currentFolder][file.value]=[];
+  saveToGitHub(); openFolder(currentFolder);
+}
+
+function delFile(f){
+  if(confirm("Delete file?")){
+    delete data[currentFolder][f];
+    saveToGitHub(); openFolder(currentFolder);
+  }
+}
+
+function openFile(f){
+  currentFile=f;
+  let e=data[currentFolder][f];
+  let bal=e.reduce((t,x)=>t+(x.type==="in"?x.amt:-x.amt),0);
+  title.innerText=`📄 ${f} | ₹${bal}`;
+
+  view.innerHTML=`
+    <button class="back" onclick="openFolder('${currentFolder}')">← Back</button>
+
+    <select id="type">
+      <option value="in">Money In</option>
+      <option value="out">Money Out</option>
+    </select>
+    <input id="amt" placeholder="Amount">
+    <input id="note" placeholder="Note">
+    <input type="file" id="proof" accept="image/*">
+    <button onclick="addEntry()">➕ Add Entry</button>
+
+    <table>
+      <tr><th>Type</th><th>Amount</th><th>Note</th><th>Proof</th><th>❌</th></tr>
+      ${e.map((x,i)=>`
+        <tr>
+          <td class="${x.type}">${x.type}</td>
+          <td class="${x.type}">${x.type==="in"?"+":"-"}₹${x.amt}</td>
+          <td>${x.note}</td>
+          <td>${x.img?`<button onclick="viewImg('${x.img}')">View</button>`:"—"}</td>
+          <td><button class="smallBtn" onclick="delEntry(${i})">X</button></td>
+        </tr>`).join("")}
+    </table>
+  `;
+}
+
+function addEntry(){
+  if(!amt.value)return;
+
+  const fileInput=document.getElementById("proof");
+  if(fileInput.files.length){
+    const reader=new FileReader();
+    reader.onload=()=>{
+      pushEntry(reader.result);
+    };
+    reader.readAsDataURL(fileInput.files[0]);
+  }else{
+    pushEntry(null);
+  }
+}
+
+function pushEntry(img){
+  data[currentFolder][currentFile].push({
+    type:type.value,
+    amt:Number(amt.value),
+    note:note.value,
+    img
+  });
+  saveToGitHub(); openFile(currentFile);
+}
+
+function delEntry(i){
+  data[currentFolder][currentFile].splice(i,1);
+  saveToGitHub(); openFile(currentFile);
+}
+
+function viewImg(src){
+  modalImg.src=src;
+  imgModal.style.display="flex";
+}
+</script>
+</body>
+</html>
