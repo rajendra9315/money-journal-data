@@ -128,67 +128,27 @@ th,td{
 <script>
 /* ===== CONFIG ===== */
 const APP_PASSWORD = "1234";
-const GITHUB_OWNER = "rajendra9315";
-const GITHUB_REPO  = "money-journal-data";
-const GITHUB_FILE  = "data.json";
-const GITHUB_TOKEN = "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";
+const STORAGE_KEY = "money_journal_data";
 
 /* ===== STATE ===== */
-let sha=null, data={}, currentFolder=null, currentFile=null;
+let data = {};
+let currentFolder=null, currentFile=null;
+
+/* ===== STORAGE ===== */
+function loadData(){
+  data = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+}
+function saveData(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
 
 /* ===== LOCK ===== */
 function unlock(){
   if(passInput.value===APP_PASSWORD){
     lockScreen.style.display="none";
-    loadFromGitHub();
+    loadData();
+    home();
   }else lockError.innerText="Wrong password";
-}
-
-/* ===== GITHUB ===== */
-async function loadFromGitHub(){
-  const r = await fetch(
-    `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_FILE}`,
-    { headers:{ Authorization:`Bearer ${GITHUB_TOKEN}` } }
-  );
-  const f = await r.json();
-  sha = f.sha;
-  data = JSON.parse(atob(f.content || "e30="));
-  home();
-}
-
-async function saveToGitHub(){
-  try{
-    const response = await fetch(
-      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_FILE}`,
-      {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${GITHUB_TOKEN}`,
-          "Content-Type": "application/json",
-          "Accept": "application/vnd.github+json"
-        },
-        body: JSON.stringify({
-          message: "Update journal",
-          content: btoa(JSON.stringify(data, null, 2)),
-          sha: sha
-        })
-      }
-    );
-
-    const result = await response.json();
-    console.log("SAVE RESPONSE:", result);
-
-    if(!response.ok){
-      alert("SAVE FAILED: " + (result.message || "Unknown error"));
-      return;
-    }
-
-    sha = result.content.sha;
-    console.log("SAVE SUCCESS");
-
-  }catch(err){
-    console.error("SAVE ERROR:", err);
-  }
 }
 
 /* ===== FLOW ===== */
@@ -209,12 +169,12 @@ function home(){
 function addFolder(){
   if(!fname.value||data[fname.value])return;
   data[fname.value]={};
-  saveToGitHub(); home();
+  saveData(); home();
 }
 function delFolder(f){
   if(confirm("Delete folder?")){
     delete data[f];
-    saveToGitHub(); home();
+    saveData(); home();
   }
 }
 
@@ -236,83 +196,7 @@ function openFolder(f){
 function addFile(){
   if(!file.value||data[currentFolder][file.value])return;
   data[currentFolder][file.value]=[];
-  saveToGitHub(); openFolder(currentFolder);
+  saveData(); openFolder(currentFolder);
 }
 function delFile(f){
-  if(confirm("Delete file?")){
-    delete data[currentFolder][f];
-    saveToGitHub(); openFolder(currentFolder);
-  }
-}
-
-function openFile(f){
-  currentFile=f;
-  let e=data[currentFolder][f];
-  let bal=e.reduce((t,x)=>t+(x.type==="in"?x.amt:-x.amt),0);
-  title.innerText=`📄 ${f} | ₹${bal}`;
-
-  view.innerHTML=`
-  <button class="back" onclick="openFolder('${currentFolder}')">← Back</button>
-  <select id="type"><option value="in">Money In</option><option value="out">Money Out</option></select>
-  <input id="amt" placeholder="Amount">
-  <input id="note" placeholder="Note">
-  <input type="file" id="proof" accept="image/*">
-  <button onclick="addEntry()">➕ Add Entry</button>
-
-  <table>
-    <tr><th>Type</th><th>Amount</th><th>Note</th><th>Proof</th><th>❌</th></tr>
-    ${e.map((x,i)=>`
-    <tr>
-      <td class="${x.type}">${x.type}</td>
-      <td class="${x.type}">${x.type==="in"?"+":"-"}₹${x.amt}</td>
-      <td>${x.note}</td>
-      <td>${x.img?`<button onclick="viewImg('${x.img}')">View</button>`:"—"}</td>
-      <td><button class="smallBtn" onclick="delEntry(${i})">X</button></td>
-    </tr>`).join("")}
-  </table>
-
-  <button onclick="exportFile()">⬇ Export Excel</button>`;
-}
-
-function addEntry(){
-  if(!amt.value)return;
-  const p=document.getElementById("proof");
-  if(p.files.length){
-    const r=new FileReader();
-    r.onload=()=>pushEntry(r.result);
-    r.readAsDataURL(p.files[0]);
-  }else pushEntry(null);
-}
-
-function pushEntry(img){
-  data[currentFolder][currentFile].push({
-    type:type.value,
-    amt:Number(amt.value),
-    note:note.value,
-    img
-  });
-  saveToGitHub(); openFile(currentFile);
-}
-function delEntry(i){
-  data[currentFolder][currentFile].splice(i,1);
-  saveToGitHub(); openFile(currentFile);
-}
-function viewImg(src){
-  modalImg.src=src; imgModal.style.display="flex";
-}
-
-/* ===== EXPORT ===== */
-function exportFile(){
-  let rows=[["Type","Amount","Note","Proof"]];
-  data[currentFolder][currentFile].forEach(e=>{
-    rows.push([e.type,e.amt,e.note,e.img?"YES":"NO"]);
-  });
-  const csv=rows.map(r=>r.join(",")).join("\n");
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
-  a.download=`${currentFolder}_${currentFile}.csv`;
-  a.click();
-}
-</script>
-</body>
-</html>
+  if(conf
